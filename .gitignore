@@ -1,3 +1,13 @@
+# Created by https://www.gitignore.io
+
+### Linux ###
+*~
+
+# KDE directory preferences
+.directory
+
+
+### Qt ###
 # C++ objects and libs
 
 *.slo
@@ -22,6 +32,7 @@ qrc_*.cpp
 ui_*.h
 Makefile*
 *-build-*
+build-*
 
 # QtCreator
 
@@ -30,3 +41,34 @@ Makefile*
 #QtCtreator Qml
 *.qmlproject.user
 *.qmlproject.user.*
+
+
+### C++ ###
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
