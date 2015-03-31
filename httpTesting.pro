@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core network
+QT       += core network xml
 
 QT       -= gui
 
@@ -16,7 +16,12 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp \
-    httpmanager.cpp
+    httpmanager.cpp \
+    parser.cpp
+
 
 HEADERS += \
-    httpmanager.h
+    httpmanager.h \
+    parser.h
+
+
