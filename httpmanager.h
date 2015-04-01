@@ -1,6 +1,8 @@
 #ifndef HTTPMANAGER_H
 #define HTTPMANAGER_H
 
+#include "parser.h"
+
 #include <QObject>
 #include <QUrl>
 #include <QNetworkAccessManager>
@@ -77,18 +79,17 @@ public slots:
     void TCPConnectionTracking(bool success);
     void downloadStartedTracking(bool success);
 //    void stopDownload();
-    void parseAnswer();
+//    void parseAnswer();
     void tidyUp();
 
 signals:
-    void xmlParsed();
     void subscribed();
     void firstByteReceived(bool success);
     void TCPConnected(bool success);
     void TCPDisconnected();
     void connectTCP();
     void startDownload();
-    void readyToParse();
+    void readyToParse(QByteArray ba);
 
 private:
     QList <QThread *> threads;
@@ -96,6 +97,7 @@ private:
     DownloadThreadStatus tStatus;
     //the socket from which to read/write, to be created after moved to thread!
     //that's why we need a pointer here
+    Parser *m_parser;
     QTcpSocket *m_socket;
     QNetworkAccessManager *m_networkAccessManager;
     QNetworkReply *m_GETReply;
@@ -114,7 +116,7 @@ private:
     QFile *m_file;
     QByteArray *m_xmlByteArray;
     QByteArray m_answerFromServer;
-    QHash<QString, QString> m_results;
+    //QHash<QString, QString> m_results;
 };
 
 #endif // HTTPMANAGER_H

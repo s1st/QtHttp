@@ -5,7 +5,7 @@
 #include <QNetworkConfiguration>
 #include <QXmlSimpleReader>
 #include <QXmlInputSource>
-#include <QXmlStreamReader>
+
 #include <QXmlStreamWriter>
 #include <QThread>
 #include <iterator>
@@ -46,13 +46,14 @@ int HttpManager::init()
     setFile("/home/simon/code/QtHttp/xmlInfoFromVlc.xml");
     m_answerFromServer = "";
 
+    m_parser = new Parser();
     setNetworkAccessManager(new QNetworkAccessManager());
     startGet();
     connect(m_GETReply, SIGNAL(readyRead()),this, SLOT(GETreadyRead()));
     connect(m_GETReply, SIGNAL(finished()), this, SLOT(GETFinished())); //Note: finished() signal comes after readyRead()
     connect(this, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
     connect(this, SIGNAL(subscribed()), this, SLOT(startAction()));
-    connect(this, SIGNAL(readyToParse()), this, SLOT(parseAnswer()));
+    connect(this, SIGNAL(readyToParse(QByteArray ba)), m_parser, SLOT(parseAnswer(QByteArray ba)));
     return 0;
 }
 
@@ -66,46 +67,6 @@ void HttpManager::setNetworkAccessManager(QNetworkAccessManager *networkAccessMa
     m_networkAccessManager = networkAccessManager;
 }
 
-bool HttpManager::parseXML(QByteArray ba)
-{
-    QXmlStreamReader * xmlReader = new QXmlStreamReader(ba);
-
-    QHash<QString, QString> values;
-    QString name;
-    QString text;
-    //Parse the XML until we reach end of it
-    while(!xmlReader->atEnd() && !xmlReader->hasError()) {
-            // Read next element
-            QXmlStreamReader::TokenType token = xmlReader->readNext();
-            //If token is just StartDocument - go to next
-            if(token == QXmlStreamReader::StartDocument) {
-                continue;
-            }
-            //If token is StartElement - read it
-            if(token == QXmlStreamReader::StartElement) {
-                if(xmlReader->name() == "root") {
-                    continue;
-                }
-                name = xmlReader->name().toString();
-            }
-//            if(token ==)
-            if(token == QXmlStreamReader::Characters && !name.isEmpty()) {
-                text = xmlReader->text().toString();
-                values.insert(name, text); //TODO excerpt
-                name.clear();
-                text.clear();
-            }
-    }
-    if(xmlReader->hasError()){
-            qDebug() << "xmlFile.xml Parse Error";
-            values.clear();
-            return false;
-    }
-    emit xmlParsed();
-    m_results  = values;
-    return true;
-}
-
 void HttpManager::GETFinished()
 {
     qDebug() << "Get finished";
@@ -117,7 +78,7 @@ void HttpManager::GETreadyRead()
     m_xmlByteArray->append(content);
     //qDebug() << "Reply:" + *m_xmlByteArray + "EOF";
     /* comes in multiple packets */
-    parseXML(*m_xmlByteArray);
+    m_parser->parseXML(*m_xmlByteArray);
 }
 
 void HttpManager::subscribe()
@@ -207,19 +168,11 @@ void HttpManager::sendRequest()
             return;
         }
     }
-
-    //start eplapsed timer for calculating the time slots
-    //measurementTimer.start();
-
     tStatus = AwaitingFirstByte;
 
     //do a blocking read for the first bytes or time-out if nothing is arriving
     if (m_socket->waitForReadyRead(firstByteReceivedTimeout))
     {
-        //TODO: check for HTTP status code and act intelligently on it
-        //currently, a 404 etc. is simply to little data
-        //to generate results, but a better checking would be great
-//        timeToFirstByte = measurementTimer.nsecsElapsed();
         tStatus = DownloadInProgress;
         //connect readyRead of the socket with read() for further reads
         connect(m_socket, &QTcpSocket::readyRead, this, &HttpManager::read);
@@ -238,8 +191,8 @@ void HttpManager::sendRequest()
 
 void HttpManager::startAction()
 {
-    QString h = m_actionUrl.host();
-    int i = QHostInfo::lookupHost(m_actionUrl.host(), this, SLOT(startThreads(QHostInfo)));
+    //QString h = m_actionUrl.host();
+    QHostInfo::lookupHost(m_actionUrl.host(), this, SLOT(startThreads(QHostInfo)));
 //    startThreads();
 }
 
@@ -275,7 +228,7 @@ void HttpManager::read()
     bytesReceived << m_socket->bytesAvailable();
     QByteArray ba = m_socket->readAll();   //we don't need the actual data but need to free space in the
     m_answerFromServer.append(ba);
-    emit readyToParse();
+    emit readyToParse(m_answerFromServer);
 }
 
 void HttpManager::disconnectionHandling()
@@ -290,8 +243,6 @@ void HttpManager::disconnectionHandling()
 
 void HttpManager::startTCPConnection()
 {
-    bool b = m_actionUrl.isValid();
-    QList<QHostAddress> l = server.addresses();
     //shouldn't happen, check anyway
     if (server.addresses().isEmpty() || (!m_actionUrl.isValid()))
     {
@@ -305,7 +256,6 @@ void HttpManager::startTCPConnection()
     //TODO my port!
     int p = m_actionUrl.port();
     m_socket->connectToHost(server.addresses().first(), p);
-//    m_socket->connectToHost(m_browseUrl., m_browseUrl.port(defaultPort));
 
     tStatus = ConnectingTCP;
 
@@ -341,54 +291,7 @@ void HttpManager::downloadStartedTracking(bool success)
     {
         qDebug() << "SUCCESS download started";
     }
-//    {
-//        downloadingThreads++;
-//    }
-//    else
-//    {
-//        notDownloadingThreads++;
-//    }
-
-//    //once all threads started their download we can start the download timer
-//    //plus some ramp-up time for the TCP connection
-//    //need to check against definition->threads, since the unconnected
-//    //threads also emit firstByteReceived(false)
-//    if(downloadingThreads + notDownloadingThreads == definition->threads)
-//    {
-//        if(notDownloadingThreads == definition->threads)
-//        {
-//            emit error("No thread able to download after TCP connection was established.");
-//            return;
-//        }
-
-//        downloadStartTime = QDateTime::currentDateTime().addMSecs(definition->rampUpTime);
-//        //when this timer fires we stop all downloads
-//        downloadTimer.singleShot(definition->targetTime + definition->rampUpTime, this, SLOT(downloadFinished()));
-    //    }
-}
-
-void HttpManager::parseAnswer()
-{
-    qDebug() << "parsing answer ...";
-    qDebug() << "before ...";
-    qDebug() << m_answerFromServer;
-    int end = m_answerFromServer.indexOf("s:Envelope");
-    m_answerFromServer.remove(0, end-1);
-    qDebug() << "after ...";
-    qDebug() << m_answerFromServer;
-    //Stripping the header away
-//    m_answerFromServer.split();
-    parseXML(m_answerFromServer);
-    QString res = m_results.value("Result");
-    qDebug() << res;
-    QByteArray resBA = "";
-    resBA.append(res);
-    //unfortunately no xml, so -> parsing?!
-//    if(!parseXML(resBA))
-//    {
-//        return;
-//    }
-    qDebug() << "what now";
+//TODO
 }
 
 void HttpManager::tidyUp()

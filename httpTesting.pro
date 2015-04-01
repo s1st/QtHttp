@@ -4,9 +4,9 @@
 #
 #-------------------------------------------------
 
-QT       += core network xml
+QT       += core network xml gui
 
-QT       -= gui
+#QT       -= gui
 
 TARGET = httpTesting
 CONFIG   += console
