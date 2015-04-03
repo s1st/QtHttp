@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QTextDocumentFragment>
 #include <QXmlStreamReader>
+#include <QMap>
 
 Parser::Parser(QObject *parent) : QObject(parent)
 {
@@ -19,7 +20,7 @@ Parser::~Parser()
 void Parser::parseUpnpReply()
 {
     //TODO delete -> flexible
-    QFile *answer = new QFile("/home/IGEL/stieber/code/QtHttp/massiveAnswer");
+    QFile *answer = new QFile("/home/simon/code/QtHttp/massiveAnswer");
     if (!answer->open(QIODevice::ReadOnly | QIODevice::Text))
     {
         qDebug() << "Loading File Problem";
@@ -33,7 +34,19 @@ void Parser::parseUpnpReply()
     QByteArray realXML;
     realXML.append(frag.toPlainText());
     qDebug() << realXML;
-    parseXML(realXML); //TODO debug
+    //parseXML(realXML); //TODO debug
+    QList<QMap<QString, QString> > tableOfContents = parseXMLtoMaps(realXML);
+    for(int i = 0; i < tableOfContents.length(); i++)
+    {
+        qDebug() << "*** The Following contents are available in this element: ***";
+        QString all = "";
+        foreach(QString s, tableOfContents[i].keys())
+        {
+               all.append(" " + s);
+        }
+        qDebug() << all;
+        qDebug() << tableOfContents[i].value("title");
+    }
 }
 
 QHash<QString, QString> Parser::results() const
@@ -85,6 +98,67 @@ bool Parser::parseXML(QByteArray ba)
     emit xmlParsed();
     m_results = values;
     return true;
+}
+
+QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba)
+{
+    QXmlStreamReader * xmlReader = new QXmlStreamReader(ba);
+
+    QList<QMap<QString, QString> > contents;
+    QString name;
+    QString text;
+    QString key;
+    QString value;
+    QMap<QString, QString> element;
+    int foundElementFlag = 0;
+    //Parse the XML until we reach end of it
+    while(!xmlReader->atEnd() && !xmlReader->hasError())
+    {
+        QXmlStreamReader::TokenType token = xmlReader->readNext();
+        name = xmlReader->name().toString();
+        text = xmlReader->text().toString();
+        if(token == QXmlStreamReader::StartDocument)
+        {
+           continue;
+        }
+        if(token == QXmlStreamReader::StartElement)
+        {
+            if(name == "item")
+            {
+                foundElementFlag = 1;
+            }
+            if(foundElementFlag == 1)
+            {
+                key = name;
+            }
+        }
+        if(token == QXmlStreamReader::Characters)
+        {
+            if(foundElementFlag == 1)
+            {
+                value = text;
+                if(!key.isEmpty())
+                {
+                    element.insert(key, value);
+                }
+            }
+        }
+        if(token == QXmlStreamReader::EndElement)
+        {
+            if(name == "item")
+            {
+                contents.append(element);
+                element.clear();
+                foundElementFlag = 0;
+            }
+        }
+    }
+    if(xmlReader->hasError()){
+            qDebug() << "xmlFile.xml Parse Error";
+            contents.clear();
+            return contents;
+    }
+    return contents;
 }
 
 void Parser::parseAnswer(QByteArray ba)

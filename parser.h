@@ -11,6 +11,7 @@ public:
     explicit Parser(QObject *parent = 0);
     ~Parser();
     bool parseXML(QByteArray ba);
+    QList<QMap<QString, QString> > parseXMLtoMaps(QByteArray ba);
 
     QHash<QString, QString> results() const;
     void setResults(const QHash<QString, QString> &results);
