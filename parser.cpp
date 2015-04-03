@@ -19,23 +19,29 @@ Parser::~Parser()
 
 void Parser::parseUpnpReply()
 {
-    //TODO delete -> flexible
-    QFile *answer = new QFile("/home/simon/code/QtHttp/massiveAnswer");
-    if (!answer->open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        qDebug() << "Loading File Problem";
-        exit(-1);
-    }
-    QByteArray ba = answer->readAll();
-    QString s(ba);
+//    Old code - This was used to write the parser separatly
+
+//    QFile *answer = new QFile("/home/simon/code/QtHttp/massiveAnswer");
+//    if (!answer->open(QIODevice::ReadOnly | QIODevice::Text))
+//    {
+//        qDebug() << "Loading File Problem";
+//        exit(-1);
+//    }
+//    QByteArray ba = answer->readAll();
+//    QString s(ba);
+    QString s(m_rawData);
+    int end = s.indexOf("s:Envelope"); //TODO needed?
+    s.remove(0, end-1);
     QTextDocumentFragment html;
     QTextDocumentFragment frag = html.fromHtml(s);
-    QString s2 = frag.toPlainText();
     QByteArray realXML;
     realXML.append(frag.toPlainText());
-    qDebug() << realXML;
-    //parseXML(realXML); //TODO debug
     QList<QMap<QString, QString> > tableOfContents = parseXMLtoMaps(realXML);
+    if(tableOfContents.length() != 0)
+    {
+        m_foundContent = tableOfContents;
+        emit contentFound();
+    }
     for(int i = 0; i < tableOfContents.length(); i++)
     {
         qDebug() << "*** The Following contents are available in this element: ***";
@@ -47,6 +53,7 @@ void Parser::parseUpnpReply()
         qDebug() << all;
         qDebug() << tableOfContents[i].value("title");
     }
+
 }
 
 QHash<QString, QString> Parser::results() const
@@ -82,7 +89,6 @@ bool Parser::parseXML(QByteArray ba)
                 }
                 name = xmlReader->name().toString();
             }
-//            if(token ==)
             if(token == QXmlStreamReader::Characters && !name.isEmpty()) {
                 text = xmlReader->text().toString();
                 values.insert(name, text); //TODO excerpt
@@ -100,18 +106,22 @@ bool Parser::parseXML(QByteArray ba)
     return true;
 }
 
+/**
+ * @brief Parser::parseXMLtoMaps
+ * @param ba is the formatted ByteArray (no "&amp" etc. but normal xml code "<\>") that came as answer from the UPnP Server
+ * @return It returns a List of QMaps. Each Map is a one element with its title, artists etc. as keys
+ */
+
 QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba)
 {
     QXmlStreamReader * xmlReader = new QXmlStreamReader(ba);
-
     QList<QMap<QString, QString> > contents;
+    QMap<QString, QString> element;
     QString name;
     QString text;
     QString key;
-    QString value;
-    QMap<QString, QString> element;
     int foundElementFlag = 0;
-    //Parse the XML until we reach end of it
+
     while(!xmlReader->atEnd() && !xmlReader->hasError())
     {
         QXmlStreamReader::TokenType token = xmlReader->readNext();
@@ -123,28 +133,27 @@ QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba)
         }
         if(token == QXmlStreamReader::StartElement)
         {
+            /* The start of a new element which is then marked with the foundElementFlag */
             if(name == "item")
             {
                 foundElementFlag = 1;
             }
             if(foundElementFlag == 1)
             {
+                /* The key has to be saved to insert it into the map when the corresponding value is found */
                 key = name;
             }
         }
         if(token == QXmlStreamReader::Characters)
         {
-            if(foundElementFlag == 1)
+            if(foundElementFlag == 1 && !key.isEmpty())
             {
-                value = text;
-                if(!key.isEmpty())
-                {
-                    element.insert(key, value);
-                }
+                element.insert(key, text);
             }
         }
         if(token == QXmlStreamReader::EndElement)
         {
+            /* At the end of the element it has to appended to the contents list and be cleared */
             if(name == "item")
             {
                 contents.append(element);
@@ -154,30 +163,34 @@ QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba)
         }
     }
     if(xmlReader->hasError()){
-            qDebug() << "xmlFile.xml Parse Error";
-            contents.clear();
+            qDebug() << "XML Parse Error";
+            /* Since obtaining as much information as possible is the task, the
+             * list wont be cleared.
+             * An xml error can be arbitrary characters at the
+             * end of the byte array.
+             * This can happen */
+            /* contents.clear(); */
             return contents;
     }
     return contents;
 }
 
-void Parser::parseAnswer(QByteArray ba)
+void Parser::parseAnswer()
 {
-    qDebug() << "parsing answer ...";
-    qDebug() << "before ...";
-    qDebug() << ba;
-    int end = ba.indexOf("s:Envelope"); //TODO needed?
-    ba.remove(0, end-1);
-    qDebug() << "after ...";
-    qDebug() << ba;
-    //Stripping the header away
-//    m_answerFromServer.split();
-    parseXML(ba);
-    QString res = m_results.value("Result");
-//    QString res = m_results.value("Result");
-    qDebug() << res;
-    QByteArray resBA = "";
-    resBA.append(res);
-    //unfortunately no xml, so -> parsing?! edit: XML with weird html-tags
-    qDebug() << "what now";
+    parseUpnpReply();
 }
+QList<QMap<QString, QString> > Parser::getFoundContent() const
+{
+    return m_foundContent;
+}
+
+QByteArray Parser::rawData() const
+{
+    return m_rawData;
+}
+
+void Parser::setRawData(const QByteArray &rawData)
+{
+    m_rawData = rawData;
+}
+

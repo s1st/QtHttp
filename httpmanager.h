@@ -78,9 +78,8 @@ public slots:
     void startTCPConnection();
     void TCPConnectionTracking(bool success);
     void downloadStartedTracking(bool success);
-//    void stopDownload();
-//    void parseAnswer();
     void tidyUp();
+    void handleContent();
 
 signals:
     void subscribed();
@@ -89,7 +88,7 @@ signals:
     void TCPDisconnected();
     void connectTCP();
     void startDownload();
-    void readyToParse(QByteArray ba);
+    void readyToParse();
 
 private:
     QList <QThread *> threads;
@@ -116,7 +115,7 @@ private:
     QFile *m_file;
     QByteArray *m_xmlByteArray;
     QByteArray m_answerFromServer;
-    //QHash<QString, QString> m_results;
+    QList<QMap<QString, QString> > m_foundContent;
 };
 
 #endif // HTTPMANAGER_H

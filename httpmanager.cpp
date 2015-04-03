@@ -5,6 +5,7 @@
 #include <QNetworkConfiguration>
 #include <QXmlSimpleReader>
 #include <QXmlInputSource>
+#include <QCoreApplication>
 
 #include <QXmlStreamWriter>
 #include <QThread>
@@ -23,9 +24,9 @@ HttpManager::~HttpManager()
 
 int HttpManager::init()
 {
-    QUrl bubbleUrl = QUrl("http://192.168.178.34:58645"); //TODO get from glimpse
-    QUrl mediatombUrl = QUrl("http://172.16.172.1:49153/");
-    QUrl myUrl = (QUrl("http://192.168.178.24:49152"));
+    //QUrl bubbleUrl = QUrl("http://192.168.178.34:58645"); //TODO get from glimpse
+    QUrl mediatombUrl = QUrl("http://172.16.172.1:49152/"); //TODO get from glimpse or somewhere else but not by hand
+    QUrl myUrl = (QUrl("http://172.16.172.1:49152"));
 //    QString getPath = "/dev/51ff7eac-45dc-bdff-ffff-ffffabac1331/desc.xml";
 //    QString eventPath = "/dev/51ff7eac-45dc-bdff-ffff-ffffabac1331/svc/upnp-org/ContentDirectory/event";
 //    QString actionPath = "/dev/51ff7eac-45dc-bdff-ffff-ffffabac1331/svc/upnp-org/ContentDirectory/action";
@@ -43,7 +44,7 @@ int HttpManager::init()
     sUrl.setPath(eventPath);
     setActionUrl(bUrl);
     setSubscribeUrl(sUrl);
-    setFile("/home/simon/code/QtHttp/xmlInfoFromVlc.xml");
+    setFile("/home/simon/code/QtHttp/xmlInfoFromVlc.xml"); //TODO
     m_answerFromServer = "";
 
     m_parser = new Parser();
@@ -51,9 +52,10 @@ int HttpManager::init()
     startGet();
     connect(m_GETReply, SIGNAL(readyRead()),this, SLOT(GETreadyRead()));
     connect(m_GETReply, SIGNAL(finished()), this, SLOT(GETFinished())); //Note: finished() signal comes after readyRead()
-    connect(this, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
+    connect(m_parser, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
     connect(this, SIGNAL(subscribed()), this, SLOT(startAction()));
-    connect(this, SIGNAL(readyToParse(QByteArray ba)), m_parser, SLOT(parseAnswer(QByteArray ba)));
+    connect(this, SIGNAL(readyToParse()), m_parser, SLOT(parseAnswer()));
+    connect(m_parser, SIGNAL(contentFound()), this, SLOT(handleContent()));
     return 0;
 }
 
@@ -74,6 +76,11 @@ void HttpManager::GETFinished()
 
 void HttpManager::GETreadyRead()
 {
+    if(m_GETReply->error() != QNetworkReply::NoError)
+    {
+        qDebug() << "Error occured while get-request:" , m_GETReply->errorString();
+        return;
+    }
     QByteArray content = m_GETReply->readAll();
     m_xmlByteArray->append(content);
     //qDebug() << "Reply:" + *m_xmlByteArray + "EOF";
@@ -86,7 +93,8 @@ void HttpManager::subscribe()
     /* Now subscribe */
     m_subscribeRequest.setUrl(m_subscribeUrl);
     QByteArray val = ("</>");
-    val.insert(1, m_myUrl.toString());
+//    val.insert(1, m_myUrl.toString());
+    val.insert(1,"192.168.2.104");
     m_subscribeRequest.setRawHeader(QByteArray("CALLBACK"), val); //TODO flexible
     m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
     m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE"); //TODO answer?
@@ -226,9 +234,10 @@ void HttpManager::startThreads(const QHostInfo &server)
 void HttpManager::read()
 {
     bytesReceived << m_socket->bytesAvailable();
-    QByteArray ba = m_socket->readAll();   //we don't need the actual data but need to free space in the
+    QByteArray ba = m_socket->readAll();
     m_answerFromServer.append(ba);
-    emit readyToParse(m_answerFromServer);
+    m_parser->setRawData(m_answerFromServer);
+    emit readyToParse();
 }
 
 void HttpManager::disconnectionHandling()
@@ -299,6 +308,19 @@ void HttpManager::tidyUp()
     m_file->close();
 }
 
+void HttpManager::handleContent()
+{
+    m_foundContent = m_parser->getFoundContent();
+    //TODO...
+    //example:
+    if(m_foundContent.length() != 0)
+    {
+        qDebug() << "lalala" + m_foundContent.at(1).value("title");
+    }
+
+    QCoreApplication::exit(0);
+}
+
 QUrl HttpManager::myUrl() const
 {
     return m_myUrl;
@@ -317,6 +339,7 @@ void HttpManager::startGet()
     qDebug() << "Sending get request ...";
     m_xmlByteArray = new QByteArray();
     m_GETReply = m_networkAccessManager->get(m_GETrequest);
+//    m_GETReply->
 }
 
 QHostInfo HttpManager::getServer() const
