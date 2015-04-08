@@ -75,18 +75,17 @@ public:
     int handleContent(QString t);
     int sendRequest();
     int read();
+    void startAction(bool firstShot);
+    int setupTCPSocketAndSend();
 
 public slots:
     void startGet();
     void GETreadyRead();
     void subscribe();
-    void startAction(bool firstShot);
-    void setupTCPSocket(const QHostInfo &server);
     void disconnectionHandling();
 //    void sendExactRequests();
 
 signals:
-    void subscribed(bool firstShot);
     void TCPConnected(bool success);
     void TCPDisconnected();
     void connectTCP();
@@ -110,7 +109,7 @@ private:
     QNetworkRequest m_subscribeRequest;
     QNetworkRequest m_browseRequest;
     QList<qint64> bytesReceived;
-    QHostInfo server;
+    QHostInfo m_server;
     QUrl m_remoteUrl;
     QList<QUrl> m_ownUrls;
     QUrl m_GETUrl;
@@ -123,6 +122,7 @@ private:
     QList<QPair<QString, QString> > m_containerIDs;
     QString m_objectID;
     QByteArray m_soapData;
+    int m_globalCounter;
 };
 
 #endif // HTTPMANAGER_H

@@ -58,14 +58,14 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     m_file->close();
     m_answerFromServer = "";
     m_objectID = "0";
+    m_globalCounter = 0;
 
     m_parser = new Parser();
+    m_parser->setSearchTerm("container"); //will be changed later, after all levels have been gone trough
     setNetworkAccessManager(new QNetworkAccessManager());
     startGet();
     connect(m_GETReply, SIGNAL(readyRead()),this, SLOT(GETreadyRead()));
     connect(m_parser, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
-    connect(this, SIGNAL(subscribed(bool)), this, SLOT(startAction(bool)));
-//    connect(this, SIGNAL(foundContainer()), this, SLOT(startAction()));
     return 0;
 }
 
@@ -108,7 +108,7 @@ void UPnPHandler::subscribe()
         m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
         m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE");
     }
-    emit subscribed(true);
+    startAction(true);
 }
 
 //TODO timer for glimpse
@@ -134,7 +134,7 @@ int UPnPHandler::sendRequest()
                               "HOST: %2\r\n"
                               "CONTENT-LENGTH: %3\r\n"
                               "CONTENT-TYPE: text/xml; charset=\"utf-8\"\r\n"
-                              "SOAPACTION: \"%4\#Browse\"\r\n"
+                              "SOAPACTION: \"%4#Browse\"\r\n"
                               "USER-AGENT: Linux/3.13.0-24-generic, UPnP/1.0, Portable SDK for UPnP devices/1.6.17\r\n\r\n").arg(m_actionUrl.path())
                                                                                                                             .arg(url)
                                                                                                                             .arg(dataLength)
@@ -179,39 +179,34 @@ void UPnPHandler::startAction(bool firstShot)
 {
     if(firstShot == true)
     {
-        QHostInfo::lookupHost(m_actionUrl.host(), this, SLOT(setupTCPSocket(QHostInfo)));
-    }else{
-        for(int i = 0; i < m_containerIDs.length(); i++)
+        if(setupTCPSocketAndSend() > 0)
         {
-            qDebug() << "Scanning " + m_containerIDs[i].first;
-            m_objectID = m_containerIDs[i].second;
-            QHostInfo::lookupHost(m_actionUrl.host(), this, SLOT(setupTCPSocket(QHostInfo)));
+            startAction(false);
+        }
+    }else{
+        while(m_globalCounter < m_containerIDs.length())
+        {
+            qDebug() << "Scanning " + m_containerIDs[m_globalCounter].first;
+            m_objectID = m_containerIDs[m_globalCounter].second;
+            m_globalCounter ++;
+            setupTCPSocketAndSend();
+            startAction(false);
+            int i = m_containerIDs.length();
+            qDebug() << i; //TODO
         }
     }
 }
 
-void UPnPHandler::setupTCPSocket(const QHostInfo &server)
+int UPnPHandler::setupTCPSocketAndSend()
 {
     int foundObjs = 1;
-    //check if the name resolution was actually successful
-    if (server.error() != QHostInfo::NoError)
-    {
-        return;
-    }
-    setServer(server);
     if(!startTCPConnection())
     {
         qDebug() << "No TCP connection established";
-        return;
+        return -1;
     }
     foundObjs = sendRequest();
-    startAction(false);
-//    for(int i = 0; i < m_containerIDs.length(); i++)
-//    {
-//        qDebug() << "Scanning " + m_containerIDs[i].first;
-//        m_objectID = m_containerIDs[i].second;
-//        setupTCPSocket(server);
-//    }
+    return foundObjs;
 }
 
 int UPnPHandler::read()
@@ -224,7 +219,7 @@ int UPnPHandler::read()
     int ret = 0;
     if(m_answerFromServer.contains(QByteArray("200 OK")))
     {
-        l = m_parser->parseAnswer(m_objectID.toInt());
+        l = m_parser->parseUpnpReply();
     }else
     {
         qDebug() << "Error from Server:\n" + m_answerFromServer;
@@ -233,8 +228,14 @@ int UPnPHandler::read()
     if(l.length() != 0)
     {
         m_foundContent = l;
-        ret = handleContent(m_parser->getSearchTerm());
+        ret = handleContent(m_parser->searchTerm());
+    }else{
+        qDebug() << "Now Searching for Items";
+        ret = 0;
+        /*No more container were found, so now the search term changes to 'item' */
+        m_parser->setSearchTerm("item");
     }
+    m_answerFromServer.clear();
     return ret;
 }
 
@@ -250,22 +251,11 @@ void UPnPHandler::disconnectionHandling()
 
 bool UPnPHandler::startTCPConnection()
 {
-    //shouldn't happen, check anyway
-    if (server.addresses().isEmpty() || (!m_actionUrl.isValid()))
-    {
-        //invoke the connection tracking code
-        tStatus = FinishedError;
-        return false;
-    }
     m_socket = new QTcpSocket();
-
-    //so let's connect now (if no port as part of the URL use 80 as default)
-    int p = m_actionUrl.port();
-    m_socket->connectToHost(server.addresses().first(), p);
-
+    m_socket->connectToHost(m_actionUrl.host(), m_actionUrl.port());
     tStatus = ConnectingTCP;
 
-    //wait for up to 5 seconds for a successful connection
+    //wait for some seconds for a successful connection
     if (m_socket->waitForConnected(tcpConnectTimeout))
     {
         //for the successfully connected sockets, we should track the disconnection
@@ -352,12 +342,12 @@ void UPnPHandler::startGet()
 
 QHostInfo UPnPHandler::getServer() const
 {
-    return server;
+    return m_server;
 }
 
 void UPnPHandler::setServer(const QHostInfo &value)
 {
-    server = value;
+    m_server = value;
 }
 
 QUrl UPnPHandler::remoteUrl() const

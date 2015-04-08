@@ -11,8 +11,8 @@ int main(int argc, char *argv[])
     UPnPHandler man;
     QUrl url;
     QString descriptionUrl, eventSubUrl, controlUrl, serviceType;
-    url = "http://172.16.172.1:49152/";
-    descriptionUrl = "http://172.16.172.1:49152/description.xml";
+    url = "http://localhost:49152/";
+    descriptionUrl = "http://localhost:49152/description.xml";
     eventSubUrl = "/upnp/event/cds";
     controlUrl = "/upnp/control/cds";
     serviceType = "urn:schemas-upnp-org:service:ContentDirectory:1";

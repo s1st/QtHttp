@@ -17,23 +17,30 @@ Parser::~Parser()
 
 }
 
-QList<QMap<QString, QString> > Parser::parseUpnpReply(QString searchElement)
+QList<QMap<QString, QString> > Parser::parseUpnpReply()
 {
     QList<QMap<QString, QString> > tableOfContents;
     QString s(m_rawData);
+    QTextDocumentFragment html;
+    QByteArray realXML;
     int end = s.indexOf("s:Envelope");
     if(end == -1)
     {
         return tableOfContents;
     }
     s.remove(0, end-1);
-    QTextDocumentFragment html;
     QTextDocumentFragment frag = html.fromHtml(s);
-    QByteArray realXML;
     realXML.append(frag.toPlainText());
-    qDebug() << realXML;
-    tableOfContents = parseXMLtoMaps(realXML, searchElement);
-    m_foundContent = tableOfContents; //TODO m_foundcontent needed?
+    tableOfContents = parseXMLtoMaps(realXML, m_searchTerm);
+    realXML.clear();
+    m_rawData.clear();
+    //m_foundContent = tableOfContents; //TODO comparing old with new, if nothing new is found -> done maybe
+    if(m_foundContent != tableOfContents)
+    {
+        m_foundContent = tableOfContents;
+    }else{
+        qDebug() << "alles hat ein Ende nur die Wurst hat zwei!";
+    }
     return tableOfContents;
 }
 
@@ -150,7 +157,7 @@ QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba, QString ele
         }
     }
     if(xmlReader->hasError()){
-            qDebug() << "XML Parse Error";
+//            qDebug() << "XML Parse Error";
             /* Since obtaining as much information as possible is the task, the
              * list wont be cleared.
              * An xml error can be arbitrary characters at the
@@ -162,26 +169,21 @@ QList<QMap<QString, QString> > Parser::parseXMLtoMaps(QByteArray ba, QString ele
     return contents;
 }
 
-QList<QMap<QString, QString> > Parser::parseAnswer(int objectID)
-{
-    //TODO ifs
-    m_searchTerm = "container";
-    return parseUpnpReply(m_searchTerm);
-//    if(objectID == 0)
-//    {
-//        parseUpnpReply("container");
-//    }else{
-//        parseUpnpReply("item");
-//    }
-}
 QList<QMap<QString, QString> > Parser::getFoundContent() const
 {
     return m_foundContent;
 }
-QString Parser::getSearchTerm() const
+
+QString Parser::searchTerm() const
 {
     return m_searchTerm;
 }
+
+void Parser::setSearchTerm(const QString &searchTerm)
+{
+    m_searchTerm = searchTerm;
+}
+
 
 QByteArray Parser::rawData() const
 {

@@ -12,8 +12,7 @@ public:
     ~Parser();
     bool parseXML(QByteArray ba);
     QList<QMap<QString, QString> > parseXMLtoMaps(QByteArray ba, QString elementToSearchFor);
-    QList<QMap<QString, QString> > parseUpnpReply(QString searchElement);
-    QList<QMap<QString, QString> > parseAnswer(int objectID);
+    QList<QMap<QString, QString> > parseUpnpReply();
 
     QHash<QString, QString> results() const;
     void setResults(const QHash<QString, QString> &results);
@@ -23,7 +22,8 @@ public:
 
     QList<QMap<QString, QString> > getFoundContent() const;
 
-    QString getSearchTerm() const;
+    QString searchTerm() const;
+    void setSearchTerm(const QString &searchTerm);
 
 signals:
     void xmlParsed();
