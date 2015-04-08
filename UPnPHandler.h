@@ -10,7 +10,7 @@
 #include <QFile>
 #include <QHostInfo>
 
-class HttpManager :public QObject
+class UPnPHandler :public QObject
 {
     Q_OBJECT
 
@@ -26,10 +26,10 @@ public:
         FinishedError
     };
 
-    HttpManager();
-    ~HttpManager();
+    UPnPHandler();
+    ~UPnPHandler();
 
-    int init();
+    int init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUrl, QString controlUrl, QString serviceType);
 
     QNetworkAccessManager * networkAccessManager() const;
     void setNetworkAccessManager(QNetworkAccessManager *networkAccessManager);
@@ -61,42 +61,45 @@ public:
     QHostInfo getServer() const;
     void setServer(const QHostInfo &value);
 
-    QUrl myUrl() const;
-    void setMyUrl(const QUrl &myUrl);
+    QString servicetype() const;
+    void setServicetype(const QString &servicetype);
+
+    QList<QMap<QString, QString> > foundContent() const;
+
+    QList<QUrl> ownUrls() const;
+    void setOwnUrls(const QList<QUrl> &ownUrls);
+
+    QList<QPair<QString, QString> > containerIDs() const;
+
+    bool startTCPConnection();
+    int handleContent(QString t);
+    int sendRequest();
+    int read();
 
 public slots:
     void startGet();
-    void GETFinished();
     void GETreadyRead();
     void subscribe();
-    void browse();
-    void sendRequest();
-    void startAction();
-    void startThreads(const QHostInfo &server);
-    void read();
+    void startAction(bool firstShot);
+    void setupTCPSocket(const QHostInfo &server);
     void disconnectionHandling();
-    void startTCPConnection();
-    void TCPConnectionTracking(bool success);
-    void downloadStartedTracking(bool success);
-//    void stopDownload();
-//    void parseAnswer();
-    void tidyUp();
+//    void sendExactRequests();
 
 signals:
-    void subscribed();
-    void firstByteReceived(bool success);
+    void subscribed(bool firstShot);
     void TCPConnected(bool success);
     void TCPDisconnected();
     void connectTCP();
     void startDownload();
-    void readyToParse(QByteArray ba);
+    void readyToParse(int m_objectID);
+    void handlingDone();
+//    void searchForObjectIDs();
+    void exactScan();
+    void foundContainer();
 
 private:
-    QList <QThread *> threads;
-    QList <HttpManager *> workers;
+    QString m_servicetype;
     DownloadThreadStatus tStatus;
-    //the socket from which to read/write, to be created after moved to thread!
-    //that's why we need a pointer here
     Parser *m_parser;
     QTcpSocket *m_socket;
     QNetworkAccessManager *m_networkAccessManager;
@@ -109,14 +112,17 @@ private:
     QList<qint64> bytesReceived;
     QHostInfo server;
     QUrl m_remoteUrl;
-    QUrl m_myUrl;
+    QList<QUrl> m_ownUrls;
     QUrl m_GETUrl;
     QUrl m_subscribeUrl;
     QUrl m_actionUrl;
     QFile *m_file;
     QByteArray *m_xmlByteArray;
     QByteArray m_answerFromServer;
-    //QHash<QString, QString> m_results;
+    QList<QMap<QString, QString> > m_foundContent;
+    QList<QPair<QString, QString> > m_containerIDs;
+    QString m_objectID;
+    QByteArray m_soapData;
 };
 
 #endif // HTTPMANAGER_H
