@@ -57,8 +57,6 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     m_soapData = m_file->readAll();
     m_file->close();
     m_answerFromServer = "";
-    m_objectID = "0";
-    m_globalCounter = 0;
     m_elementsOnLevelPlusCounter.clear();
 
     m_parser = new Parser();
@@ -106,19 +104,19 @@ void UPnPHandler::subscribe()
 }
 
 //TODO timer for glimpse
-int UPnPHandler::sendRequest()
+QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
 {
     //we can only download, if this thread sucessfully established the
     //TCP connection (all threads will receive the signal)
     if(m_socket->state() != QAbstractSocket::ConnectedState)
     {
         tStatus = FinishedError;
-        return(-1);
+//        return(-1);
     }
     //different values for the object-IDs need to be inserted. starting with 0;
     //Parsing the answer and then again send request to the corresponding object-IDs -> new loop or slots TODO
     QByteArray b;
-    b.append(m_objectID);
+    b.append(objectID);
     QByteArray data = m_soapData;
     data.replace("##wildcard##", QByteArray(b));
     int dataLength = data.length();
@@ -146,27 +144,27 @@ int UPnPHandler::sendRequest()
         {
             m_socket->close();
             tStatus = FinishedError;
-            return(-1);
+//            return(-1);
         }
     }
     bytesWritten = 0;
     tStatus = AwaitingFirstByte;
     int ret = 0;
-
+    QList<QPair<QString, QString> > containers;
     //do a blocking read for the first bytes or time-out if nothing is arriving
     if (m_socket->waitForReadyRead(firstByteReceivedTimeout))
     {
         tStatus = DownloadInProgress;
-        ret = read();
+        containers = read();
     }
     else
     {
         qDebug() << m_socket->errorString();
         tStatus = FinishedError;
         m_socket->close();
-        return(-1);
+//        return(-1);
     }
-    return ret ;
+    return containers ;
 }
 /**
  * @brief UPnPHandler::startAction
@@ -174,68 +172,84 @@ int UPnPHandler::sendRequest()
  */
 void UPnPHandler::startAction(int firstMiddleOrLastShot)
 {
-    if(firstMiddleOrLastShot == 0) /*first*/
-    {
-        if(setupTCPSocketAndSend() > 0)
-        {
-            startAction(1);
-        }
-    }else{
-        if(firstMiddleOrLastShot == 1) /*middle*/
-        {
-            QPair<int, int> p;
-            /* the first in the qpair is the counter, the second is the max index */
-            m_elementsOnLevelPlusCounter.append(QPair<int, int>(0, m_containerIDs.length()-1));
-        }
-        int *counter = &m_elementsOnLevelPlusCounter.last().first;
-        int *max = &m_elementsOnLevelPlusCounter.last().second;
-//        while(m_elementsOnLevelPlusCounter.last().first < m_elementsOnLevelPlusCounter.last().second)
-        while(*counter < *max)
-        {
-            qDebug() << "Scanning " + m_containerIDs[*counter].first;
-            m_objectID = m_containerIDs[*counter].second;
-            int j = setupTCPSocketAndSend();
-            if(j == 0)
-            {
-                (*counter)++;
-                startAction(2); /* with the parameter 2, the element counter will not be starting from new, but step trough the list */
-                //m_elementsOnLevelPlusCounter.removeLast(); // So the recursion has to move up
-            }else if(j == -1)
-            {
-                /* done with the container -> deleting last of list*/
-                qDebug() << "++";
-            }
-//            m_elementsOnLevelPlusCounter.last().first ++;
-            startAction(1);
-        }
-        /* After scanning the lowest level the iterator has to move on */
-    }
-    qDebug() << "Done with search action";
+    setupTCPSocketAndSend("0");
+//    setupTCPSocketAndSend("38");
+//    if(firstMiddleOrLastShot == 0) /*first try -> object ID is 0*/
+//    {
+//        if(setupTCPSocketAndSend("0") > 0)
+//        {
+//            startAction(1);
+//        }
+//    }else{
+//        if(firstMiddleOrLastShot == 1) /*middle level*/
+//        {
+//            /* the first in the QPair is the counter, the second is the max index */
+//            m_elementsOnLevelPlusCounter.append(QPair<int, int>(0, m_containerIDs.length()-1));
+//        }
+//        int *counter = &m_elementsOnLevelPlusCounter.last().first;
+//        int *max = &m_elementsOnLevelPlusCounter.last().second;
+//        while(*counter < *max)
+//        {
+//            qDebug() << "Scanning " + m_containerIDs[*counter].first;
+//            QString objectID = m_containerIDs[*counter].second;
+//            int j = setupTCPSocketAndSend(objectID);
+//            if(j == 0)
+//            {
+//                (*counter)++;
+//                startAction(2); /* with the parameter 2, the element counter will not be starting from new, but step trough the list */
+//                //m_elementsOnLevelPlusCounter.removeLast(); // So the recursion has to move up
+//            }else if(j == -1)
+//            {
+//                /* done with the container -> deleting last of list*/
+//                qDebug() << "++";
+//            }
+////            m_elementsOnLevelPlusCounter.last().first ++;
+//            startAction(1);
+//        }
+//        /* After scanning the lowest level the iterator has to move on */
+//    }
+//    qDebug() << "Done with search action";
     return;
 }
 
-int UPnPHandler::setupTCPSocketAndSend()
+QList<QPair<QString, QString> > UPnPHandler::setupTCPSocketAndSend(QString objectID)
 {
-    int foundObjs = 1;
-    if(!startTCPConnection())
+    QList<QPair<QString, QString> > foundObjs;
+    int i = 0;
+    while(i == 0)
     {
-        qDebug() << "No TCP connection established";
-        return -1;
+        if(!startTCPConnection())
+        {
+            qDebug() << "No TCP connection established";
+            //TODO error handling
+        }
+        foundObjs = sendRequest(objectID); //if -1 is returned, the end of the container is reached
+        if(!foundObjs.isEmpty())
+        {
+            qDebug() << "Searching " + foundObjs.at(i).first;
+            setupTCPSocketAndSend(foundObjs.at(i).second); //TODO counter
+        }
+        else{
+            i++;
+            break;
+        }
     }
-    foundObjs = sendRequest(); //if -1 is returned, the end of the container is reached
     return foundObjs;
 }
 
-int UPnPHandler::read()
+QList<QPair<QString, QString> > UPnPHandler::read()
 {
     bytesReceived << m_socket->bytesAvailable();
     QByteArray ba = m_socket->readAll();
     m_answerFromServer.append(ba);
     m_parser->setRawData(m_answerFromServer);
     QList<QMap<QString, QString> > l;
+    QList<QPair<QString, QString> > containers;
     int ret = 0;
     if(m_answerFromServer.contains(QByteArray("200 OK")))
     {
+        qDebug() << "******************************";
+        qDebug() << ba;
         l = m_parser->parseUpnpReply();
     }else
     {
@@ -245,16 +259,22 @@ int UPnPHandler::read()
     if(l.length() != 0)
     {
         m_foundContent = l;
-        ret = handleContent(m_parser->searchTerm());
+        containers = handleContent(m_parser->searchTerm());
     }else{
-        qDebug() << "Now Searching for Items";
+        //TODO
         ret = 0;
-        /*No more container were found, so now the search term changes to 'item' */
+        /* No more container were found, so now the search term changes to 'item'
+         * and search again
+         */
         m_parser->setSearchTerm("item");
-//        ret = handleContent(m_parser->searchTerm());
+        qDebug() << "******************************";
+        qDebug() << ba;
+        l = m_parser->parseUpnpReply();
+        containers = handleContent(m_parser->searchTerm());
     }
     m_answerFromServer.clear();
-    return ret;
+    ba.clear();
+    return containers;
 }
 
 void UPnPHandler::disconnectionHandling()
@@ -311,12 +331,12 @@ bool UPnPHandler::startTCPConnection()
  * @return number of elements found
  */
 
-int UPnPHandler::handleContent(QString t)
+QList<QPair<QString, QString> > UPnPHandler::handleContent(QString t)
 {
-    int ret = 0;
+//    int ret = 0;
+    QList<QPair<QString, QString> > objectIDsandPurpose;
     if(t == "container")
     {
-        QList<QPair<QString, QString> > objectIDsandPurpose;
         for(int i = 0; i < m_foundContent.length(); i++) {
             QString id = m_foundContent[i].value("id");
             QString title = m_foundContent[i].value("title");
@@ -325,14 +345,14 @@ int UPnPHandler::handleContent(QString t)
             m.second = id;
             objectIDsandPurpose.append(m);
         }
-        m_containerIDs = objectIDsandPurpose;
-        ret = m_containerIDs.length();
+//        m_containerIDs.append(objectIDsandPurpose);
+//        ret = m_containerIDs.length();
     }else if (t == "item") {
         //TODO
         qDebug() << "handling found items ---> stepping up";
-        ret = -1;
+//        ret = -1;
     }
-    return ret;
+    return objectIDsandPurpose;
 }
 
 QNetworkAccessManager * UPnPHandler::networkAccessManager() const

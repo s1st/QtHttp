@@ -52,8 +52,6 @@ public:
 
     static const int tcpConnectTimeout = 10000;
     static const int firstByteReceivedTimeout = 10000;
-    static const int defaultPort = 80;
-    static const int threadnum = 1;
 
     QUrl remoteUrl() const;
     void setRemoteUrl(const QUrl &url);
@@ -72,11 +70,11 @@ public:
     QList<QPair<QString, QString> > containerIDs() const;
 
     bool startTCPConnection();
-    int handleContent(QString t);
-    int sendRequest();
-    int read();
+    QList<QPair<QString, QString> > handleContent(QString t);
+    QList<QPair<QString, QString> > sendRequest(QString objectID);
+    QList<QPair<QString, QString> > read();
     void startAction(int firstMiddleOrLastShot);
-    int setupTCPSocketAndSend();
+    QList<QPair<QString, QString> > setupTCPSocketAndSend(QString objectID);
 
 public slots:
     void startGet();
@@ -90,9 +88,7 @@ signals:
     void TCPDisconnected();
     void connectTCP();
     void startDownload();
-    void readyToParse(int m_objectID);
     void handlingDone();
-//    void searchForObjectIDs();
     void exactScan();
     void foundContainer();
     void browsingFinished();
@@ -121,9 +117,7 @@ private:
     QByteArray m_answerFromServer;
     QList<QMap<QString, QString> > m_foundContent;
     QList<QPair<QString, QString> > m_containerIDs;
-    QString m_objectID;
     QByteArray m_soapData;
-    int m_globalCounter;
     QList<QPair<int, int> > m_elementsOnLevelPlusCounter;
 };
 
