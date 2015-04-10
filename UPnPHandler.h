@@ -75,7 +75,7 @@ public:
     int handleContent(QString t);
     int sendRequest();
     int read();
-    void startAction(bool firstShot);
+    void startAction(int firstMiddleOrLastShot);
     int setupTCPSocketAndSend();
 
 public slots:
@@ -83,7 +83,7 @@ public slots:
     void GETreadyRead();
     void subscribe();
     void disconnectionHandling();
-//    void sendExactRequests();
+    void printResults();
 
 signals:
     void TCPConnected(bool success);
@@ -95,6 +95,7 @@ signals:
 //    void searchForObjectIDs();
     void exactScan();
     void foundContainer();
+    void browsingFinished();
 
 private:
     QString m_servicetype;
@@ -123,6 +124,7 @@ private:
     QString m_objectID;
     QByteArray m_soapData;
     int m_globalCounter;
+    QList<QPair<int, int> > m_elementsOnLevelPlusCounter;
 };
 
 #endif // HTTPMANAGER_H

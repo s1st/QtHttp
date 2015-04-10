@@ -26,7 +26,7 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
     int end = s.indexOf("s:Envelope");
     if(end == -1)
     {
-        return tableOfContents;
+        return tableOfContents; //TODO different error handling
     }
     s.remove(0, end-1);
     QTextDocumentFragment frag = html.fromHtml(s);
@@ -39,7 +39,7 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
     {
         m_foundContent = tableOfContents;
     }else{
-        qDebug() << "alles hat ein Ende nur die Wurst hat zwei!";
+        qDebug() << "Nichts neues wurde auf item ebene gefunden"; //TODO
     }
     return tableOfContents;
 }

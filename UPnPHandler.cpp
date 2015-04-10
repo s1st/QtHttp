@@ -59,6 +59,7 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     m_answerFromServer = "";
     m_objectID = "0";
     m_globalCounter = 0;
+    m_elementsOnLevelPlusCounter.clear();
 
     m_parser = new Parser();
     m_parser->setSearchTerm("container"); //will be changed later, after all levels have been gone trough
@@ -66,17 +67,8 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     startGet();
     connect(m_GETReply, SIGNAL(readyRead()),this, SLOT(GETreadyRead()));
     connect(m_parser, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
+    connect(this, SIGNAL(browsingFinished()), this, SLOT(printResults()));
     return 0;
-}
-
-QNetworkAccessManager * UPnPHandler::networkAccessManager() const
-{
-    return m_networkAccessManager;
-}
-
-void UPnPHandler::setNetworkAccessManager(QNetworkAccessManager *networkAccessManager)
-{
-    m_networkAccessManager = networkAccessManager;
 }
 
 void UPnPHandler::GETreadyRead()
@@ -108,7 +100,9 @@ void UPnPHandler::subscribe()
         m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
         m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE");
     }
-    startAction(true);
+    startAction(0);
+    qDebug() << "returned";
+    emit browsingFinished();
 }
 
 //TODO timer for glimpse
@@ -174,27 +168,50 @@ int UPnPHandler::sendRequest()
     }
     return ret ;
 }
-
-void UPnPHandler::startAction(bool firstShot)
+/**
+ * @brief UPnPHandler::startAction
+ * @param firstMiddleOrLastShot if its first it gets 0, in the middle it gets 1, and on the last level it gets 2
+ */
+void UPnPHandler::startAction(int firstMiddleOrLastShot)
 {
-    if(firstShot == true)
+    if(firstMiddleOrLastShot == 0) /*first*/
     {
         if(setupTCPSocketAndSend() > 0)
         {
-            startAction(false);
+            startAction(1);
         }
     }else{
-        while(m_globalCounter < m_containerIDs.length())
+        if(firstMiddleOrLastShot == 1) /*middle*/
         {
-            qDebug() << "Scanning " + m_containerIDs[m_globalCounter].first;
-            m_objectID = m_containerIDs[m_globalCounter].second;
-            m_globalCounter ++;
-            setupTCPSocketAndSend();
-            startAction(false);
-            int i = m_containerIDs.length();
-            qDebug() << i; //TODO
+            QPair<int, int> p;
+            /* the first in the qpair is the counter, the second is the max index */
+            m_elementsOnLevelPlusCounter.append(QPair<int, int>(0, m_containerIDs.length()-1));
         }
+        int *counter = &m_elementsOnLevelPlusCounter.last().first;
+        int *max = &m_elementsOnLevelPlusCounter.last().second;
+//        while(m_elementsOnLevelPlusCounter.last().first < m_elementsOnLevelPlusCounter.last().second)
+        while(*counter < *max)
+        {
+            qDebug() << "Scanning " + m_containerIDs[*counter].first;
+            m_objectID = m_containerIDs[*counter].second;
+            int j = setupTCPSocketAndSend();
+            if(j == 0)
+            {
+                (*counter)++;
+                startAction(2); /* with the parameter 2, the element counter will not be starting from new, but step trough the list */
+                //m_elementsOnLevelPlusCounter.removeLast(); // So the recursion has to move up
+            }else if(j == -1)
+            {
+                /* done with the container -> deleting last of list*/
+                qDebug() << "++";
+            }
+//            m_elementsOnLevelPlusCounter.last().first ++;
+            startAction(1);
+        }
+        /* After scanning the lowest level the iterator has to move on */
     }
+    qDebug() << "Done with search action";
+    return;
 }
 
 int UPnPHandler::setupTCPSocketAndSend()
@@ -205,7 +222,7 @@ int UPnPHandler::setupTCPSocketAndSend()
         qDebug() << "No TCP connection established";
         return -1;
     }
-    foundObjs = sendRequest();
+    foundObjs = sendRequest(); //if -1 is returned, the end of the container is reached
     return foundObjs;
 }
 
@@ -234,6 +251,7 @@ int UPnPHandler::read()
         ret = 0;
         /*No more container were found, so now the search term changes to 'item' */
         m_parser->setSearchTerm("item");
+//        ret = handleContent(m_parser->searchTerm());
     }
     m_answerFromServer.clear();
     return ret;
@@ -247,6 +265,21 @@ void UPnPHandler::disconnectionHandling()
         tStatus = FinishedSuccess;
         emit TCPDisconnected();
     }
+}
+
+void UPnPHandler::printResults()
+{
+//    QList<QMap<QString, QString> > m_foundContent;
+    for(int i = 0; i < m_foundContent.length(); i++)
+    {
+        QStringList l = m_foundContent[i].keys();
+        qDebug() << "Found items:";
+        foreach(QString s, l)
+        {
+            qDebug() << s + " " + m_foundContent[i].value(s);
+        }
+    }
+//    QCoreApplication::exit(0);
 }
 
 bool UPnPHandler::startTCPConnection()
@@ -296,8 +329,20 @@ int UPnPHandler::handleContent(QString t)
         ret = m_containerIDs.length();
     }else if (t == "item") {
         //TODO
+        qDebug() << "handling found items ---> stepping up";
+        ret = -1;
     }
     return ret;
+}
+
+QNetworkAccessManager * UPnPHandler::networkAccessManager() const
+{
+    return m_networkAccessManager;
+}
+
+void UPnPHandler::setNetworkAccessManager(QNetworkAccessManager *networkAccessManager)
+{
+    m_networkAccessManager = networkAccessManager;
 }
 
 QList<QPair<QString, QString> > UPnPHandler::containerIDs() const
