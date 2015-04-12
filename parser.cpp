@@ -26,6 +26,7 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
     int end = s.indexOf("s:Envelope");
     if(end == -1)
     {
+        qDebug() << "No xml data was found";
         return tableOfContents; //TODO different error handling
     }
     s.remove(0, end-1);

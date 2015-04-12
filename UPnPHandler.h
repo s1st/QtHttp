@@ -73,8 +73,8 @@ public:
     QList<QPair<QString, QString> > handleContent(QString t);
     QList<QPair<QString, QString> > sendRequest(QString objectID);
     QList<QPair<QString, QString> > read();
-    void startAction(int firstMiddleOrLastShot);
     QList<QPair<QString, QString> > setupTCPSocketAndSend(QString objectID);
+//    void readSocketData(bool selfCall);
 
 public slots:
     void startGet();
@@ -82,6 +82,7 @@ public slots:
     void subscribe();
     void disconnectionHandling();
     void printResults();
+//    void readSocketDataSelfCall();
 
 signals:
     void TCPConnected(bool success);
@@ -119,6 +120,8 @@ private:
     QList<QPair<QString, QString> > m_containerIDs;
     QByteArray m_soapData;
     QList<QPair<int, int> > m_elementsOnLevelPlusCounter;
+//    bool selfCall = true;
+    int m_datacounter;
 };
 
 #endif // HTTPMANAGER_H
