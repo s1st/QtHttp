@@ -73,7 +73,7 @@ public:
     QList<QPair<QString, QString> > handleContent(QString t);
     QList<QPair<QString, QString> > sendRequest(QString objectID);
     QList<QPair<QString, QString> > read();
-    QList<QPair<QString, QString> > setupTCPSocketAndSend(QString objectID);
+    int setupTCPSocketAndSend(QString objectID, int counter);
 //    void readSocketData(bool selfCall);
 
 public slots:

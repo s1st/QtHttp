@@ -99,8 +99,7 @@ void UPnPHandler::subscribe()
         m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
         m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE");
     }
-    setupTCPSocketAndSend("0");
-    qDebug() << "returned";
+    setupTCPSocketAndSend("0", 0);
     emit browsingFinished();
 }
 
@@ -138,8 +137,7 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
     while(bytesWritten < header.length())
     {
         bytesWritten += m_socket->write(header.mid(bytesWritten).toLatin1());
-
-        //on error
+        /* on error */
         if(bytesWritten < 0)
         {
             m_socket->close();
@@ -157,8 +155,7 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
             containers = read();
         }catch(int e)
         {
-            qDebug() << "No data part of http packet was found";
-//            sendRequest(objectID);
+            //qDebug() << "No data part of http packet was found";
             throw e;
         }
     }
@@ -171,43 +168,59 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
     return containers ;
 }
 
-QList<QPair<QString, QString> > UPnPHandler::setupTCPSocketAndSend(QString objectID)
+int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
 {
     QList<QPair<QString, QString> > foundObjs;
-    int i = 0;
-    while(i == 0)
+//    int i = 0;
+    int j = 10;
+    while(counter < j)
     {
         if(!startTCPConnection())
         {
             qDebug() << "No TCP connection established";
             //TODO error handling
         }
-        try{
-            foundObjs = sendRequest(objectID);
-        }catch(int e)
+        /* at first doungObjs list is empty,
+         * later those list are needed to step through
+         * all containers and shall not be overwriten*/
+        if(foundObjs.isEmpty())
         {
-            /* Since the package was not successfully received from server,
-             * a new TCP Connection has to be established */
-            continue;
+            try{
+                foundObjs = sendRequest(objectID);
+            }catch(int e)
+            {
+                /* Since the package was not successfully received from server,
+                 * a new TCP Connection has to be established */
+                continue;
+            }
         }
-
+        /* meant to handle when items are available */
         if(!foundObjs.isEmpty())
         {
-            qDebug() << "Searching " + foundObjs.at(i).first;
-            setupTCPSocketAndSend(foundObjs.at(i).second); //TODO counter
+            qDebug() << "Searching " + foundObjs.at(counter).first + " "  + foundObjs.at(counter).second;
+            counter = setupTCPSocketAndSend(foundObjs.at(counter).second, counter); //TODO counter
+            j = foundObjs.length();
         }
         else{  //if(foundObjs.first() == QPair<QString, QString>("done", "here")){
-            i++;
+            counter++;
+            qDebug() << "Searching children of " + objectID;
             break;
         }
     }
-    return foundObjs;
+    if(counter == j)
+    {
+        qDebug() << "##################################";
+        /* For the upper level the counter has to be
+         * set to 0 again to search all elements */
+        counter = 0;
+    }
+    return counter;
 }
 
 QList<QPair<QString, QString> > UPnPHandler::read()
 {
     bytesReceived << m_socket->bytesAvailable();
-    qDebug() << bytesReceived.last();
+    //qDebug() << bytesReceived.last();
     QByteArray ba;
     while(!m_socket->atEnd())
     {
@@ -324,6 +337,7 @@ QList<QPair<QString, QString> > UPnPHandler::handleContent(QString t)
     }else if (t == "item") {
         //TODO
         qDebug() << "handling found items ---> stepping up";
+        /* appending nothing -> returning empty list */
 //        objectIDsandPurpose.append(QPair<QString, QString>("done", "here"));
     }
     return objectIDsandPurpose;
