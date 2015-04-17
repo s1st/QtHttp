@@ -33,7 +33,6 @@ public:
 
     QNetworkAccessManager * networkAccessManager() const;
     void setNetworkAccessManager(QNetworkAccessManager *networkAccessManager);
-    bool parseXML(QByteArray ba);
 
     QUrl GETUrl() const;
     void setGETUrl(const QUrl &GETUrl);
@@ -74,7 +73,6 @@ public:
     QList<QPair<QString, QString> > sendRequest(QString objectID);
     QList<QPair<QString, QString> > read();
     int setupTCPSocketAndSend(QString objectID, int counter);
-//    void readSocketData(bool selfCall);
 
 public slots:
     void startGet();
@@ -82,15 +80,12 @@ public slots:
     void subscribe();
     void disconnectionHandling();
     void printResults();
-//    void readSocketDataSelfCall();
 
 signals:
     void TCPConnected(bool success);
     void TCPDisconnected();
     void connectTCP();
     void startDownload();
-    void handlingDone();
-    void exactScan();
     void foundContainer();
     void browsingFinished();
 
@@ -118,10 +113,8 @@ private:
     QByteArray m_answerFromServer;
     QList<QMap<QString, QString> > m_foundContent;
     QList<QPair<QString, QString> > m_containerIDs;
+    QList<QMap<QString, QString> > m_totalTableOfContents;
     QByteArray m_soapData;
-    QList<QPair<int, int> > m_elementsOnLevelPlusCounter;
-//    bool selfCall = true;
-    int m_datacounter;
 };
 
 #endif // HTTPMANAGER_H

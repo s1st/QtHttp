@@ -58,7 +58,6 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     m_soapData = m_file->readAll();
     m_file->close();
     m_answerFromServer = "";
-    m_elementsOnLevelPlusCounter.clear();
 
     m_parser = new Parser();
     m_parser->setSearchTerm("container"); //will be changed later, after all levels have been gone trough
@@ -171,7 +170,6 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
 int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
 {
     QList<QPair<QString, QString> > foundObjs;
-//    int i = 0;
     int j = 10;
     while(counter < j)
     {
@@ -190,18 +188,18 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
             }catch(int e)
             {
                 /* Since the package was not successfully received from server,
-                 * a new TCP Connection has to be established */
+                 * a new TCP Connection has to be established -> loop*/
                 continue;
             }
         }
-        /* meant to handle when items are available */
+        /* Handling items when available */
         if(!foundObjs.isEmpty())
         {
             qDebug() << "Searching " + foundObjs.at(counter).first + " "  + foundObjs.at(counter).second;
             counter = setupTCPSocketAndSend(foundObjs.at(counter).second, counter); //TODO counter
             j = foundObjs.length();
         }
-        else{  //if(foundObjs.first() == QPair<QString, QString>("done", "here")){
+        else{
             counter++;
             qDebug() << "Searching children of " + objectID;
             break;
@@ -214,6 +212,8 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
          * set to 0 again to search all elements */
         counter = 0;
     }
+    /*if the level is finished, the searchTerm must be set back to "container" to find containers again */
+    m_parser->setSearchTerm("container");
     return counter;
 }
 
@@ -226,6 +226,7 @@ QList<QPair<QString, QString> > UPnPHandler::read()
     {
         ba.append(m_socket->read(100));
     }
+    qDebug() << ba;
     /* A byte received count below 400 means,
      * that there was just the header sent,
      * so the package is damaged and
@@ -261,7 +262,9 @@ QList<QPair<QString, QString> > UPnPHandler::read()
          * and search again
          */
         m_parser->setSearchTerm("item");
+        m_parser->setRawData(m_answerFromServer);
         l = m_parser->parseUpnpReply();
+        m_foundContent = l;
         containers = handleContent(m_parser->searchTerm());
     }
     ba.clear();
@@ -333,12 +336,20 @@ QList<QPair<QString, QString> > UPnPHandler::handleContent(QString t)
             m.first = title;
             m.second = id;
             objectIDsandPurpose.append(m);
+//            objectIDsandPurpose.append(QPair<QString, QString>
+//                                       (m_foundContent[i].value("id"),
+//                                        m_foundContent[i].value("title")));
         }
     }else if (t == "item") {
-        //TODO
-        qDebug() << "handling found items ---> stepping up";
-        /* appending nothing -> returning empty list */
-//        objectIDsandPurpose.append(QPair<QString, QString>("done", "here"));
+        /* Copying only non-existant values into totalTableOfContents */
+        for(int i = 0; i < m_foundContent.length(); i++)
+        {
+            if(m_totalTableOfContents.indexOf(m_foundContent[i]) == -1)
+            {
+                m_totalTableOfContents.append(m_foundContent[i]);
+            }
+        }
+        /* appending nothing to objectIDsanPurpose -> returning empty list */
     }
     return objectIDsandPurpose;
 }
