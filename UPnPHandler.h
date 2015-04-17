@@ -49,8 +49,8 @@ public:
     QUrl actionUrl() const;
     void setActionUrl(const QUrl &actionUrl);
 
-    static const int tcpConnectTimeout = 10000;
-    static const int firstByteReceivedTimeout = 10000;
+    static const int tcpConnectTimeout = 5000;
+    static const int firstByteReceivedTimeout = 5000;
 
     QUrl remoteUrl() const;
     void setRemoteUrl(const QUrl &url);
@@ -87,7 +87,6 @@ signals:
     void connectTCP();
     void startDownload();
     void foundContainer();
-    void browsingFinished();
 
 private:
     QString m_servicetype;

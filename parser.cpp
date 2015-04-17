@@ -31,7 +31,10 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
     }
     s.remove(0, end-1);
     QTextDocumentFragment frag = html.fromHtml(s);
+    QString s2 = frag.toPlainText();
     realXML.append(frag.toPlainText());
+
+//    qDebug() << "################" << realXML;
     tableOfContents = parseXMLtoMaps(realXML, m_searchTerm);
     realXML.clear();
     m_rawData.clear();
@@ -42,6 +45,7 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
     }else{
         qDebug() << "Nichts neues wurde auf item ebene gefunden"; //TODO
     }
+//    frag.isEmpty();
     return tableOfContents;
 }
 
@@ -193,6 +197,8 @@ QByteArray Parser::rawData() const
 
 void Parser::setRawData(const QByteArray &rawData)
 {
+//    qDebug() << "##before###\n" << m_rawData; TODO
     m_rawData = rawData;
+//    qDebug() << "##after###\n" << m_rawData;
 }
 
