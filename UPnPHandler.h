@@ -80,6 +80,7 @@ public slots:
     void subscribe();
     void disconnectionHandling();
     void printResults();
+    void readSID();
 
 signals:
     void TCPConnected(bool success);

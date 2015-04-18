@@ -10,6 +10,7 @@
 #include <QXmlStreamWriter>
 #include <QThread>
 #include <iterator>
+#include <QTcpServer>
 
 UPnPHandler::UPnPHandler()
 {
@@ -24,7 +25,8 @@ UPnPHandler::~UPnPHandler()
 int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUrl, QString controlUrl, QString serviceType)
 {
     QList<QUrl> ownUrls;
-    foreach (const QHostAddress &address, QNetworkInterface::allAddresses()) {
+    foreach (const QHostAddress &address, QNetworkInterface::allAddresses())
+    {
         if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost))
         {
             QString s = QString("http://%1").arg(address.toString());
@@ -63,7 +65,7 @@ int UPnPHandler::init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUr
     m_parser->setSearchTerm("container"); //will be changed later, after all levels have been gone trough
     setNetworkAccessManager(new QNetworkAccessManager());
     startGet();
-    connect(m_GETReply, SIGNAL(readyRead()),this, SLOT(GETreadyRead()));
+    connect(m_GETReply, SIGNAL(readyRead()), this, SLOT(GETreadyRead()));
     connect(m_parser, SIGNAL(xmlParsed()), this, SLOT(subscribe()));
     return 0;
 }
@@ -84,21 +86,66 @@ void UPnPHandler::GETreadyRead()
 void UPnPHandler::subscribe()
 {
     /* Now subscribe */
+    int port = 3333;
+    QTcpServer listener;
+    listener.listen(QHostAddress::Any,port);
     m_subscribeRequest.setUrl(m_subscribeUrl);
     QByteArray valTemplate = ("</>");
     QByteArray val = valTemplate;
     /* trying all localhost addresses */
-    foreach(QUrl u, m_ownUrls)
-    {
-        u.setPort(49153); //That is the vlc port, using it since it works in vlc
+//    foreach(QUrl u, m_ownUrls)
+//    {
+        m_ownUrls[0].setPort(port); //That is the vlc port, using it since it works in vlc
         val = valTemplate;
-        val.insert(1, u.toString());
+        val.insert(1, m_ownUrls[0].toString());
         m_subscribeRequest.setRawHeader(QByteArray("CALLBACK"), val);
         m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
+//        m_networkAccessManager->connectToHost(m_ownUrls[0].toString(), 49153);
+//        QList<QByteArray> l = m_subscribeRequest.rawHeaderList();
         m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE");
+//    }
+    if(listener.waitForNewConnection(3000))
+    {
+        QTcpSocket * socket = listener.nextPendingConnection();
+        QString url = m_remoteUrl.toString();
+        url.remove("http://");
+        QString subHeader = QString("SUBSCRIBE %1 HTTP/1.1\r\n"
+                                 "HOST: %2\r\n"
+                                 "CALLBACK: <http://192.168.2.104:3333/>\r\n"
+                                 "NT: upnp:event\r\n"
+                                 "TIMEOUT: Second-1810\r\n\r\n").arg(m_subscribeUrl.path())
+                                                                .arg(url);
+        int bytesWritten = 0;
+        while(bytesWritten < subHeader.length())
+        {
+            bytesWritten += socket->write(subHeader.mid(bytesWritten).toLatin1());
+            /* on error */
+            if(bytesWritten < 0)
+            {
+                socket->close();
+            }
+        }
+        bytesWritten = 0;
+        QString s;
+        if (socket->waitForReadyRead(3000))
+        {
+            s = socket->readAll();
+            qDebug() << s;
+            //TODO parse this answer, extract SID ->
+        }
+        else
+        {
+            qDebug() << socket->errorString();
+            socket->close();
+        }
+    }else{
+        qDebug() << "No tcp connection established" << listener.errorString();
     }
-    int highestLevelCounter = setupTCPSocketAndSend("0", 0);
-    printResults();
+
+//    connect(m_subscribeReply, SIGNAL(bytesWritten(qint64)), this, SLOT(readSID()));
+
+//    int highestLevelCounter = setupTCPSocketAndSend("0", 0); //FIXME uncomment
+//    printResults();
 }
 
 //TODO timer for glimpse
@@ -111,7 +158,7 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
         tStatus = FinishedError;
     }
     //different values for the object-IDs need to be inserted. starting with 0;
-    //Parsing the answer and then again send request to the corresponding object-IDs -> new loop or slots TODO
+    //Parsing the answer and then again send request to the corresponding object-IDs
     QByteArray b;
     b.append(objectID);
     QByteArray data = m_soapData;
@@ -145,15 +192,10 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
     bytesWritten = 0;
     tStatus = AwaitingFirstByte;
     QList<QPair<QString, QString> > containers;
-//    if(objectID == "451")
-//    {
-//        qDebug() << "here";
-//    }
     if (m_socket->waitForReadyRead(firstByteReceivedTimeout))
     {
         tStatus = DownloadInProgress;
-        try
-        {
+        try        {
             containers = read();
         }catch(int e)
         {
@@ -174,8 +216,8 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
 {
     QList<QPair<QString, QString> > foundObjs;
     int savedPos = counter;
-    int j = 1000;
-    while(counter < j)
+//    int j = 1000;
+    while(true)
     {
         if(!startTCPConnection())
         {
@@ -183,7 +225,7 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
             QCoreApplication::exit(-1);
             //TODO error handling
         }
-        /* At first foungObjs list is empty,
+        /* At first foundObjs list is empty,
          * later those list are needed to step through
          * all containers and shall not be overwriten*/
         if(foundObjs.isEmpty())
@@ -203,9 +245,6 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
             m_socket->close();
             qDebug() << "Searching " + foundObjs.at(counter).first + " "  + foundObjs.at(counter).second;
             counter = setupTCPSocketAndSend(foundObjs.at(counter).second, counter); //FIXME counter
-//            counter = setupTCPSocketAndSend(foundObjs.at(counter).second, 0); //FIXME counter
-            qDebug() << "--->" << counter << j;
-            j = foundObjs.length();
         }
         else{
             counter++;
@@ -213,13 +252,7 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
             break;
         }
     }
-    if(counter == j)
-    {
-        qDebug() << "##################################";
-        /* For the upper level the counter has to be
-         * set to 0 again to search all elements */
-        counter = savedPos + 1;
-    }
+    counter = savedPos + 1;
     /* If the level is finished,
      * the searchTerm must be set back to "container"
      * to find containers again */
@@ -280,9 +313,10 @@ QList<QPair<QString, QString> > UPnPHandler::read()
     return containers;
 }
 
+/* handling premature TCP disconnects */
+
 void UPnPHandler::disconnectionHandling()
 {
-    // handling premature TCP disconnects
     if(tStatus == DownloadInProgress)
     {
         tStatus = FinishedSuccess;
@@ -300,10 +334,21 @@ void UPnPHandler::printResults()
 //        {
 //            qDebug() << s + " " + m_totalTableOfContents[i].value(s);
 //        }originalTrackNumber
-        qDebug()  << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
+        qDebug()  << i << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
     }
     qDebug() << "A total of" << m_totalTableOfContents.length() << "elements was found";
     QCoreApplication::exit(0);
+}
+
+void UPnPHandler::readSID()
+{
+    if(m_subscribeReply->error() != QNetworkReply::NoError)
+    {
+        qDebug() << "Error occured while subscribe-request:" , m_subscribeReply->errorString();
+        return;
+    }
+    QByteArray a = m_subscribeReply->readAll();
+    qDebug() << a;
 }
 
 bool UPnPHandler::startTCPConnection()
@@ -413,7 +458,11 @@ void UPnPHandler::startGet()
     m_GETrequest.setRawHeader(QByteArray("USER-AGENT"), QByteArray("Linux/3.13.0-24-generic, UPnP/1.0, Portable SDK for UPnP devices/1.6.17"));
 
     qDebug() << "Sending get request ...";
-    m_xmlByteArray = new QByteArray();
+    m_xmlByteArray = new QByteArray(); //TODO initiate here?!
+//    QNetworkConfiguration conf = m_networkAccessManager->activeConfiguration();
+//    QString s = conf.name();
+//    QString s1 = conf.identifier();
+//    conf.
     m_GETReply = m_networkAccessManager->get(m_GETrequest);
 }
 
