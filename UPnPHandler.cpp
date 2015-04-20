@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QNetworkInterface>
 #include <QTimer>
+#include <QtAlgorithms>
 
 #include <QXmlStreamWriter>
 #include <QThread>
@@ -86,7 +87,7 @@ void UPnPHandler::GETreadyRead()
 void UPnPHandler::subscribe()
 {
     /* Now subscribe */
-    int port = 3333;
+    int port = 49153;
     QTcpServer listener;
     listener.listen(QHostAddress::Any,port);
     m_subscribeRequest.setUrl(m_subscribeUrl);
@@ -100,6 +101,7 @@ void UPnPHandler::subscribe()
         val.insert(1, m_ownUrls[0].toString());
         m_subscribeRequest.setRawHeader(QByteArray("CALLBACK"), val);
         m_subscribeRequest.setRawHeader(QByteArray("NT"), ("upnp:event"));
+        m_subscribeRequest.setRawHeader(QByteArray("TIMEOUT"), ("Second-1810"));
 //        m_networkAccessManager->connectToHost(m_ownUrls[0].toString(), 49153);
 //        QList<QByteArray> l = m_subscribeRequest.rawHeaderList();
         m_subscribeReply = m_networkAccessManager->sendCustomRequest(m_subscribeRequest, "SUBSCRIBE");
@@ -107,30 +109,38 @@ void UPnPHandler::subscribe()
     if(listener.waitForNewConnection(3000))
     {
         QTcpSocket * socket = listener.nextPendingConnection();
-        QString url = m_remoteUrl.toString();
-        url.remove("http://");
-        QString subHeader = QString("SUBSCRIBE %1 HTTP/1.1\r\n"
-                                 "HOST: %2\r\n"
-                                 "CALLBACK: <http://192.168.2.104:3333/>\r\n"
-                                 "NT: upnp:event\r\n"
-                                 "TIMEOUT: Second-1810\r\n\r\n").arg(m_subscribeUrl.path())
-                                                                .arg(url);
-        int bytesWritten = 0;
-        while(bytesWritten < subHeader.length())
-        {
-            bytesWritten += socket->write(subHeader.mid(bytesWritten).toLatin1());
-            /* on error */
-            if(bytesWritten < 0)
-            {
-                socket->close();
-            }
-        }
-        bytesWritten = 0;
         QString s;
         if (socket->waitForReadyRead(3000))
         {
             s = socket->readAll();
             qDebug() << s;
+            QString url = m_remoteUrl.toString();
+            QByteArray ok = QByteArray("<html><body><h1>200 OK</h1></body></html>");
+            int dataLength = ok.length();
+            url.remove("http://");
+            QString subHeader = QString("HTTP/1.1 200 OK\r\n"
+                                        "SERVER: Linux/3.13.0-24-generic, UPnP/1.0, Portable SDK for UPnP devices/1.6.17\r\n"
+                                        "CONNECTION: close\r\n"
+                                        "CONTENT-LENGTH: %1\r\n"
+                                        "CONTENT-TYPE: text/html\r\n\r\n").arg(dataLength);
+            subHeader.append(ok);
+            int bytesWritten = 0;
+
+            while(bytesWritten < subHeader.length())
+            {
+                bytesWritten += socket->write(subHeader.mid(bytesWritten).toLatin1());
+                /* on error */
+                if(bytesWritten < 0)
+                {
+                    socket->close();
+                }
+            }
+            if(socket->waitForReadyRead(3000))
+            {
+                QByteArray answer = socket->readAll();
+                qDebug() << answer;
+            }
+            bytesWritten = 0;
             //TODO parse this answer, extract SID ->
         }
         else
@@ -141,11 +151,11 @@ void UPnPHandler::subscribe()
     }else{
         qDebug() << "No tcp connection established" << listener.errorString();
     }
-
+    int highestLevelCounter = setupTCPSocketAndSend("0", 0); //FIXME uncomment
 //    connect(m_subscribeReply, SIGNAL(bytesWritten(qint64)), this, SLOT(readSID()));
 
-//    int highestLevelCounter = setupTCPSocketAndSend("0", 0); //FIXME uncomment
-//    printResults();
+
+    printResults();
 }
 
 //TODO timer for glimpse
@@ -165,7 +175,10 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
     data.replace("##wildcard##", QByteArray(b));
     int dataLength = data.length();
     QString url = m_remoteUrl.toString();
+
     url.remove("http://");
+    //if last  == /
+//    url.chop(1);
     QString header = QString("POST %1 HTTP/1.1\r\n"
                               "HOST: %2\r\n"
                               "CONTENT-LENGTH: %3\r\n"
@@ -195,7 +208,7 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
     if (m_socket->waitForReadyRead(firstByteReceivedTimeout))
     {
         tStatus = DownloadInProgress;
-        try        {
+        try{
             containers = read();
         }catch(int e)
         {
@@ -214,6 +227,7 @@ QList<QPair<QString, QString> > UPnPHandler::sendRequest(QString objectID)
 
 int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
 {
+//    QThread::msleep(400);
     QList<QPair<QString, QString> > foundObjs;
     int savedPos = counter;
 //    int j = 1000;
@@ -326,16 +340,29 @@ void UPnPHandler::disconnectionHandling()
 
 void UPnPHandler::printResults()
 {
+    QStringList list;
     for(int i = 0; i < m_totalTableOfContents.length(); i++)
     {
-        QStringList l = m_totalTableOfContents[i].keys();
+        if(list.contains(m_totalTableOfContents[i].value("id")))
+        {
+            qDebug() << "double found";
+        }
+        QString s = m_totalTableOfContents[i].value("id");
+        list.append(s);
+
 //        qDebug() << "Found items:";
 //        foreach(QString s, l)
 //        {
 //            qDebug() << s + " " + m_totalTableOfContents[i].value(s);
 //        }originalTrackNumber
-        qDebug()  << i << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
+        qDebug() << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
     }
+    QList<int> listInt;
+    foreach(QString s, list)
+    {
+        listInt.append(s.toInt());
+    }
+    qSort(listInt.begin(), listInt.end());
     qDebug() << "A total of" << m_totalTableOfContents.length() << "elements was found";
     QCoreApplication::exit(0);
 }
@@ -402,9 +429,13 @@ QList<QPair<QString, QString> > UPnPHandler::handleContent(QString t)
         /* Copying only non-existant values into totalTableOfContents */
         for(int i = 0; i < m_foundContent.length(); i++)
         {
+            int x = m_totalTableOfContents.indexOf(m_foundContent[i]);
             if(m_totalTableOfContents.indexOf(m_foundContent[i]) == -1)
             {
                 m_totalTableOfContents.append(m_foundContent[i]);
+            }
+            else{
+                qDebug() << "double found:" << m_foundContent[i] << m_totalTableOfContents[x];
             }
         }
         /* appending nothing to objectIDsandPurpose -> returning empty list */
