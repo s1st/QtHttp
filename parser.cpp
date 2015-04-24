@@ -17,7 +17,7 @@ Parser::~Parser()
 
 }
 
-QList<QMap<QString, QString> > Parser::parseUpnpReply()
+QList<QMap<QString, QString> > Parser::parseUpnpReply(int expectedLength)
 {
     QList<QMap<QString, QString> > tableOfContents;
     QString s(m_rawData);
@@ -30,22 +30,23 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply()
         return tableOfContents; //TODO different error handling
     }
     s.remove(0, end-1);
+    if(s.length() != expectedLength)
+    {
+        throw 400;
+    }
     QTextDocumentFragment frag = html.fromHtml(s);
     QString s2 = frag.toPlainText();
     realXML.append(frag.toPlainText());
 
-//    qDebug() << "################" << realXML;
     tableOfContents = parseXMLtoMaps(realXML, m_searchTerm);
     realXML.clear();
     m_rawData.clear();
-    //m_foundContent = tableOfContents; //TODO comparing old with new, if nothing new is found -> done maybe
     if(m_foundContent != tableOfContents)
     {
         m_foundContent = tableOfContents;
     }else{
         qDebug() << "Nichts neues wurde auf item ebene gefunden"; //TODO
-    }
-//    frag.isEmpty();
+    };
     return tableOfContents;
 }
 

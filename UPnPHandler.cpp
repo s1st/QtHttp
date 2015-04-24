@@ -262,7 +262,7 @@ int UPnPHandler::setupTCPSocketAndSend(QString objectID, int counter)
         }
         else{
             counter++;
-            qDebug() << "No more containers found -> searching children of " + objectID;
+            //qDebug() << "No more containers found -> searching children of " + objectID;
             break;
         }
     }
@@ -279,9 +279,19 @@ QList<QPair<QString, QString> > UPnPHandler::read()
 {
     bytesReceived << m_socket->bytesAvailable();
     QByteArray ba;
+    QByteArray line;
     while(!m_socket->atEnd())
     {
-        ba.append(m_socket->read(100));
+        line = m_socket->readLine(10000);
+        ba.append(line);
+        int i;
+        QString cont = "CONTENT-LENGTH:";
+        if((i = line.indexOf(cont))!=-1)
+        {
+            line.remove(i, cont.length());
+            line = line.trimmed();
+            m_expectedLength = line.toInt();
+        }
     }
     /* A byteReceived count below 400 means,
      * that there was just the header sent,
@@ -291,10 +301,6 @@ QList<QPair<QString, QString> > UPnPHandler::read()
     {
         throw 400;
     }
-    while(!m_socket->atEnd())
-    {
-        ba.append(m_socket->read(100));
-    }
     m_answerFromServer = ba;
     m_parser->setRawData(m_answerFromServer);
     QList<QMap<QString, QString> > l;
@@ -302,7 +308,12 @@ QList<QPair<QString, QString> > UPnPHandler::read()
     /* To be sure if a http 200 packet came back and it has a xml part */
     if(m_answerFromServer.contains(QByteArray("200 OK")))
     {
-        l = m_parser->parseUpnpReply();
+        try{
+            l = m_parser->parseUpnpReply(m_expectedLength);
+        }catch(int e)
+        {
+            throw e;
+        }
     }else
     {
         qDebug() << "Error from Server or incomplete package:\n" + m_answerFromServer;
@@ -319,7 +330,12 @@ QList<QPair<QString, QString> > UPnPHandler::read()
          */
         m_parser->setSearchTerm("item");
         m_parser->setRawData(m_answerFromServer);
-        l = m_parser->parseUpnpReply();
+        try{
+            l = m_parser->parseUpnpReply(m_expectedLength);
+        }catch(int e)
+        {
+            throw e;
+        }
         m_foundContent = l;
         containers = handleContent(m_parser->searchTerm());
     }
@@ -340,29 +356,29 @@ void UPnPHandler::disconnectionHandling()
 
 void UPnPHandler::printResults()
 {
-    QStringList list;
-    for(int i = 0; i < m_totalTableOfContents.length(); i++)
-    {
-        if(list.contains(m_totalTableOfContents[i].value("id")))
-        {
-            qDebug() << "double found";
-        }
-        QString s = m_totalTableOfContents[i].value("id");
-        list.append(s);
+//    QStringList list;
+//    for(int i = 0; i < m_totalTableOfContents.length(); i++)
+//    {
+//        if(list.contains(m_totalTableOfContents[i].value("id")))
+//        {
+//            qDebug() << "double found";
+//        }
+//        QString s = m_totalTableOfContents[i].value("id");
+//        list.append(s);
 
 //        qDebug() << "Found items:";
 //        foreach(QString s, l)
 //        {
 //            qDebug() << s + " " + m_totalTableOfContents[i].value(s);
 //        }originalTrackNumber
-        qDebug() << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
-    }
-    QList<int> listInt;
-    foreach(QString s, list)
-    {
-        listInt.append(s.toInt());
-    }
-    qSort(listInt.begin(), listInt.end());
+//        qDebug() << m_totalTableOfContents[i].value("id") << m_totalTableOfContents[i].value("title") << m_totalTableOfContents[i].value("originalTrackNumber");
+//    }
+//    QList<int> listInt;
+//    foreach(QString s, list)
+//    {
+//        listInt.append(s.toInt());
+//    }
+//    qSort(listInt.begin(), listInt.end());
     qDebug() << "A total of" << m_totalTableOfContents.length() << "elements was found";
     QCoreApplication::exit(0);
 }
@@ -377,6 +393,16 @@ void UPnPHandler::readSID()
     QByteArray a = m_subscribeReply->readAll();
     qDebug() << a;
 }
+int UPnPHandler::expectedLength() const
+{
+    return m_expectedLength;
+}
+
+void UPnPHandler::setExpectedLength(int expectedLength)
+{
+    m_expectedLength = expectedLength;
+}
+
 
 bool UPnPHandler::startTCPConnection()
 {
@@ -426,6 +452,7 @@ QList<QPair<QString, QString> > UPnPHandler::handleContent(QString t)
 //                                        m_foundContent[i].value("title")));
         }
     }else if (t == "item") {
+        qDebug() << "Found " << m_foundContent.length();
         /* Copying only non-existant values into totalTableOfContents */
         for(int i = 0; i < m_foundContent.length(); i++)
         {

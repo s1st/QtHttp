@@ -74,6 +74,9 @@ public:
     QList<QPair<QString, QString> > read();
     int setupTCPSocketAndSend(QString objectID, int counter);
 
+    int expectedLength() const;
+    void setExpectedLength(int expectedLength);
+
 public slots:
     void startGet();
     void GETreadyRead();
@@ -115,6 +118,7 @@ private:
     QList<QPair<QString, QString> > m_containerIDs;
     QList<QMap<QString, QString> > m_totalTableOfContents;
     QByteArray m_soapData;
+    int m_expectedLength;
 };
 
 #endif // HTTPMANAGER_H

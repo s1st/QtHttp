@@ -12,7 +12,7 @@ public:
     ~Parser();
     bool parseXML(QByteArray ba);
     QList<QMap<QString, QString> > parseXMLtoMaps(QByteArray ba, QString elementToSearchFor);
-    QList<QMap<QString, QString> > parseUpnpReply();
+    QList<QMap<QString, QString> > parseUpnpReply(int expectedLength);
 
     QHash<QString, QString> results() const;
     void setResults(const QHash<QString, QString> &results);
