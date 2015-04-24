@@ -1,2 +1,3 @@
-# QtHttp
-Trying to create custom HTTP packets with XML content -> SOAP
+# QtHttp - Upnp Sniffer
+Creating custom HTTP packets with XML content to browse UPnP servers.
+Working on DLNA.
