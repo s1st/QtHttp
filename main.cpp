@@ -9,8 +9,8 @@ int main(int argc, char *argv[])
 {   
     QCoreApplication a(argc, argv);
     UPnPHandler man;
-    QUrl url;
-    QString descriptionUrl, eventSubUrl, controlUrl, serviceType;
+    QUrl url, descriptionUrl;
+    QString eventSubUrl, controlUrl, serviceType;
 
     /* Media Tomb */
     url = "http://localhost:49152/";
@@ -18,9 +18,17 @@ int main(int argc, char *argv[])
     eventSubUrl = "/upnp/event/cds";
     controlUrl = "/upnp/control/cds";
 
+    /****************************************************/
+
+    /* uShare */
+//    url = "http://192.168.2.104:49153/";
+//    descriptionUrl = "http://192.168.2.104:49153/description.xml";
+//    eventSubUrl = "/web/cds_event";
+//    controlUrl = "/web/cds_control";
+
     /* minidlna */
-//    url = "http://192.168.2.104:8200/";
-//    descriptionUrl = "http://192.168.2.104:8200/rootDesc.xml";
+//    url = "http://172.16.172.1:8200/";
+//    descriptionUrl = "http://172.16.172.1:8200/rootDesc.xml";
 //    eventSubUrl = "/evt/ContentDir";
 //    controlUrl = "/ctl/ContentDir";
 
@@ -43,7 +51,7 @@ int main(int argc, char *argv[])
 //    controlUrl = "/ContentDirectory/fe8e1f2a-1505-c82d-80e2-721ad07a0f10/control.xml";
 
     serviceType = "urn:schemas-upnp-org:service:ContentDirectory:1";
-    man.init(url, descriptionUrl, eventSubUrl, controlUrl, serviceType);
+    man.init(descriptionUrl, eventSubUrl, controlUrl, serviceType);
 
     return a.exec();
 }

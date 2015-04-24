@@ -27,7 +27,7 @@ QList<QMap<QString, QString> > Parser::parseUpnpReply(int expectedLength)
     if(end == -1)
     {
         qDebug() << "No xml data was found";
-        return tableOfContents; //TODO different error handling
+        return tableOfContents;
     }
     s.remove(0, end-1);
     if(s.length() != expectedLength)
@@ -61,13 +61,9 @@ void Parser::setResults(const QHash<QString, QString> &results)
 }
 
 
-bool Parser::parseXML(QByteArray ba)
+int Parser::parseXML(QByteArray ba)
 {
     QXmlStreamReader * xmlReader = new QXmlStreamReader(ba);
-
-    QHash<QString, QString> values;
-    QString name;
-    QString text;
     //Parse the XML until we reach end of it
     while(!xmlReader->atEnd() && !xmlReader->hasError()) {
             // Read next element
@@ -81,23 +77,13 @@ bool Parser::parseXML(QByteArray ba)
                 if(xmlReader->name() == "root") {
                     continue;
                 }
-                name = xmlReader->name().toString();
-            }
-            if(token == QXmlStreamReader::Characters && !name.isEmpty()) {
-                text = xmlReader->text().toString();
-                values.insert(name, text); //TODO excerpt
-                name.clear();
-                text.clear();
             }
     }
     if(xmlReader->hasError()){
             qDebug() << "xmlFile.xml Parse Error";
-            values.clear();
-            return false;
+            return -1;
     }
-    emit xmlParsed();
-    m_results = values;
-    return true;
+    return 0;
 }
 
 /**

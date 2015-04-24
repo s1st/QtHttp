@@ -29,10 +29,7 @@ public:
     UPnPHandler();
     ~UPnPHandler();
 
-    int init(QUrl remoteUrl, QString descriptionUrl, QString eventSubUrl, QString controlUrl, QString serviceType);
-
-    QNetworkAccessManager * networkAccessManager() const;
-    void setNetworkAccessManager(QNetworkAccessManager *networkAccessManager);
+    int init(QUrl descriptionUrl, QString eventSubUrl, QString controlUrl, QString serviceType);
 
     QUrl GETUrl() const;
     void setGETUrl(const QUrl &GETUrl);
@@ -51,6 +48,8 @@ public:
 
     static const int tcpConnectTimeout = 5000;
     static const int firstByteReceivedTimeout = 5000;
+
+    static const int defaultPort = 49160;
 
     QUrl remoteUrl() const;
     void setRemoteUrl(const QUrl &url);
@@ -79,7 +78,7 @@ public:
 
 public slots:
     void startGet();
-    void GETreadyRead();
+    int GETreadyRead(QByteArray content);
     void subscribe();
     void disconnectionHandling();
     void printResults();
@@ -97,7 +96,6 @@ private:
     DownloadThreadStatus tStatus;
     Parser *m_parser;
     QTcpSocket *m_socket;
-    QNetworkAccessManager *m_networkAccessManager;
     QNetworkReply *m_GETReply;
     QNetworkReply *m_subscribeReply;
     QNetworkReply *m_browseReply;
